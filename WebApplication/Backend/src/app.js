@@ -20,8 +20,10 @@ app.use(monitorRequest);
 
 // routes import
 import logRouter from './routes/log.routes.js'
+import authRouter from './routes/auth.route.js'
 
 // routes declaration
 app.use("/api/v1/logs", logRouter)
+app.use("/api/v1/auth", authRouter)
 
 export { app }
