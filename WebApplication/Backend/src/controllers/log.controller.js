@@ -1,6 +1,6 @@
-import { asyncHandler } from "../utils/asyncHandler.js";
-import { ApiError } from "../utils/ApiError.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
+import asyncHandler from "../utils/asyncHandler.js";
+import ApiError from "../utils/ApiError.js";
+import ApiResponse from "../utils/ApiResponse.js";
 import { Log } from "../models/Log.model.js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from "uuid";
 //         new ApiResponse(201, log, "Log created successfully")
 //     )
 // })
+
 
 const createLog = asyncHandler(async (req, res) => {
     const logData = req.body;
