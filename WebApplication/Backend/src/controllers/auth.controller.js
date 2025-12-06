@@ -1,9 +1,12 @@
-import User from '../models/User.model.js';
+import { Admin } from '../models/Admin.model.js';
+import { Analyst } from '../models/Analyst.model.js';
 import jwt from 'jsonwebtoken';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { ApiError } from '../utils/ApiError.js';
+import { ApiResponse } from '../utils/ApiResponse.js';
 
-const generateAccessAndRefereshTokens = async (userId) => {
+const generateAccessAndRefereshTokens = async (user) => {
     try {
-        const user = await User.findById(userId);
         const accessToken = user.generateAccessToken();
         const refreshToken = user.generateRefreshToken();
 
@@ -12,98 +15,112 @@ const generateAccessAndRefereshTokens = async (userId) => {
 
         return { accessToken, refreshToken };
     } catch (error) {
-        throw new Error("Something went wrong while generating referesh and access token");
+        throw new ApiError(500, "Something went wrong while generating referesh and access token");
     }
 };
 
-export const register = async (req, res) => {
-    try {
-        const { username, password, role } = req.body;
+export const register = asyncHandler(async (req, res) => {
+    const { username, password, role } = req.body;
 
-        // Check if user already exists
-        const existingUser = await User.findOne({ username });
-        if (existingUser) {
-            return res.status(400).json({ success: false, message: 'Username already exists' });
-        }
+    // Determine model based on role
+    const targetRole = role === 'admin' ? 'admin' : 'analyst';
+    const Model = targetRole === 'admin' ? Admin : Analyst;
 
-        // Create new user
-        const user = await User.create({
-            username,
-            password,
-            role
-        });
+    // Check if user already exists
+    const existingUser = await Model.findOne({ username });
+    if (existingUser) {
+        throw new ApiError(400, "Username already exists");
+    }
 
-        const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(user._id);
+    // Create new user
+    const user = await Model.create({
+        username,
+        password,
+        role: targetRole
+    });
 
-        const options = {
-            httpOnly: true,
-            secure: true
-        };
+    const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(user);
 
-        res.status(201)
-            .cookie("refreshToken", refreshToken, options)
-            .json({
-                success: true,
-                accessToken,
-                refreshToken,
-                user: {
-                    _id: user._id,
-                    username: user.username,
-                    role: user.role
+    const options = {
+        httpOnly: true,
+        secure: true
+    };
+
+    res.status(201)
+        .cookie("refreshToken", refreshToken, options)
+        .json(
+            new ApiResponse(
+                201,
+                {
+                    user: {
+                        _id: user._id,
+                        username: user.username,
+                        role: user.role
+                    },
+                    accessToken,
+                    refreshToken
                 },
-                message: "User registered successfully"
-            });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+                "User registered successfully"
+            )
+        );
+});
+
+export const login = asyncHandler(async (req, res) => {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        throw new ApiError(400, "Username and password are required");
     }
-};
 
-export const login = async (req, res) => {
-    try {
-        const { username, password } = req.body;
+    // Check Analyst first
+    let user = await Analyst.findOne({ username });
 
-        // Check for user
-        const user = await User.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials' });
-        }
+    // If not found, check Admin
+    if (!user) {
+        user = await Admin.findOne({ username });
+    }
 
-        // Check password
-        const isMatch = await user.comparePassword(password);
-        if (!isMatch) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials' });
-        }
+    if (!user) {
+        throw new ApiError(401, "Invalid credentials");
+    }
 
-        const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(user._id);
+    // Check password
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+        throw new ApiError(401, "Invalid credentials");
+    }
 
-        const options = {
-            httpOnly: true,
-            secure: true
-        };
+    const { accessToken, refreshToken } = await generateAccessAndRefereshTokens(user);
 
-        res.status(200)
-            .cookie("refreshToken", refreshToken, options)
-            .json({
-                success: true,
-                user: {
-                    _id: user._id,
-                    username: user.username,
-                    role: user.role
+    const options = {
+        httpOnly: true,
+        secure: true
+    };
+
+    res.status(200)
+        .cookie("refreshToken", refreshToken, options)
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    user: {
+                        _id: user._id,
+                        username: user.username,
+                        role: user.role
+                    },
+                    accessToken,
+                    refreshToken
                 },
-                accessToken,
-                refreshToken,
-                message: "User logged in successfully"
-            });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
+                "User logged in successfully"
+            )
+        );
+});
 
-export const refreshAccessToken = async (req, res) => {
+export const refreshAccessToken = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
 
     if (!incomingRefreshToken) {
-        return res.status(401).json({ success: false, message: "Unauthorized request" });
+        throw new ApiError(401, "Unauthorized request");
     }
 
     try {
@@ -112,14 +129,18 @@ export const refreshAccessToken = async (req, res) => {
             process.env.REFRESH_TOKEN_SECRET || "refresh-token-secret"
         );
 
-        const user = await User.findById(decodedToken?._id);
+        // Try to find user in both collections
+        let user = await Analyst.findById(decodedToken?._id);
+        if (!user) {
+            user = await Admin.findById(decodedToken?._id);
+        }
 
         if (!user) {
-            return res.status(401).json({ success: false, message: "Invalid refresh token" });
+            throw new ApiError(401, "Invalid refresh token");
         }
 
         if (incomingRefreshToken !== user?.refreshToken) {
-            return res.status(401).json({ success: false, message: "Refresh token is expired or used" });
+            throw new ApiError(401, "Refresh token is expired or used");
         }
 
         const options = {
@@ -127,17 +148,38 @@ export const refreshAccessToken = async (req, res) => {
             secure: true
         };
 
-        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefereshTokens(user._id);
+        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefereshTokens(user);
 
         res.status(200)
             .cookie("refreshToken", newRefreshToken, options)
-            .json({
-                success: true,
-                accessToken,
-                refreshToken: newRefreshToken,
-                message: "Access token refreshed"
-            });
+            .json(
+                new ApiResponse(
+                    200,
+                    {
+                        accessToken,
+                        refreshToken: newRefreshToken
+                    },
+                    "Access token refreshed"
+                )
+            );
     } catch (error) {
-        res.status(401).json({ success: false, message: error?.message || "Invalid refresh token" });
+        throw new ApiError(401, error?.message || "Invalid refresh token");
     }
-};
+});
+
+export const getCurrentUser = asyncHandler(async (req, res) => {
+    const user = req.user;
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                user: {
+                    _id: user._id,
+                    username: user.username,
+                    role: user.role
+                }
+            },
+            "User fetched successfully"
+        )
+    );
+});
