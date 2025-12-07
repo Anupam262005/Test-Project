@@ -45,10 +45,10 @@ const XSS = () => {
         for (let i = 0; i < requestCount; i++) {
             await new Promise(r => setTimeout(r, 200));
 
-            // We inject the payload into the NAME field (a common XSS target in forms)
+
             const attackData = {
                 name: payload,
-                email: i > 0 ? `xss${i}@mail.com` : email, // Avoid unique constraint error on backend if multiple reqs
+                email: i > 0 ? `xss${i}@mail.com` : email,
                 phone_no: i > 0 ? `${9000000000 + i}` : phone,
                 password: password
             };

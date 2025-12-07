@@ -41,7 +41,7 @@ const BruteForce = () => {
         for (let i = 0; i < attemptCount; i++) {
             if (cancelled) break;
 
-            // Determine password for this attempt
+
             let passwordTry = "";
             if (passwordSource === 'common') {
                 passwordTry = commonPasswords[i % commonPasswords.length];

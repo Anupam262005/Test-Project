@@ -4,11 +4,13 @@ import { app } from './app.js'
 
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { initSocket } from "./socket.js";
+import { startLogCleanup } from "./utils/cleanupService.js";
+import { seedKnowledgeBase } from "./services/rag.service.js";
 
 dotenv.config({
     path: './.env'
 })
-
 const httpServer = createServer(app);
 
 const allowedOrigins = [
@@ -27,12 +29,21 @@ const io = new Server(httpServer, {
 
 app.set("io", io);
 
-// Update Express CORS too if needed, usually app.js handles it. 
-// Assuming app.use(cors(...)) is in app.js. Let's check app.js next.
 
 connectDB()
-    .then(() => {
-        httpServer.listen(process.env.PORT || 8000, () => {
+    .then(async () => {
+        const server = createServer(app);
+        initSocket(server);
+        startLogCleanup();
+
+        // Seed RAG Data
+        try {
+            await seedKnowledgeBase();
+        } catch (err) {
+            console.error("Seeding Failed:", err);
+        }
+
+        server.listen(process.env.PORT || 8000, () => {
             console.log(`⚙️ Server is running at port : ${process.env.PORT}`);
         })
     })

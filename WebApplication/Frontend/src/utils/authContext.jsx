@@ -4,8 +4,10 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const SERVER_URL = import.meta.env.VITE_SERVER.replace(/\/$/, ""); // Ensure no trailing slash
+    const API_URL = `${SERVER_URL}/auth`;
 
     useEffect(() => {
         checkAuth();
@@ -13,24 +15,25 @@ export const AuthProvider = ({ children }) => {
 
     const checkAuth = async () => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_SERVER}/auth/verify`, {
+            const response = await fetch(`${API_URL}/verify`, {
                 credentials: 'include'
             });
 
             if (response.ok) {
-                const data = await response.json();
-                setIsAuthenticated(data.data.isAuthenticated);
-                if (data.data.isAuthenticated) {
-                    // You might want to fetch user details here
-                    setUser(data.data.user || { role: 'patient' }); // Default role for demo
+                // Check if response is JSON
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    const data = await response.json();
+                    setIsAuthenticated(data.data.isAuthenticated);
+                } else {
+                    // Not JSON, likely HTML error page
+                    setIsAuthenticated(false);
                 }
             } else {
                 setIsAuthenticated(false);
-                setUser(null);
             }
         } catch (error) {
             setIsAuthenticated(false);
-            setUser(null);
         } finally {
             setLoading(false);
         }
@@ -38,38 +41,42 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (identifier, password, role) => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_SERVER}/auth/login`, {
+            const response = await fetch(`${API_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ identifier, password, role }),
                 credentials: 'include'
             });
 
+            const contentType = response.headers.get("content-type");
+            if (!contentType || contentType.indexOf("application/json") === -1) {
+                // Try to get text to see what happened (e.g. 404 HTML)
+                const text = await response.text();
+                console.error("Non-JSON response:", text);
+                return { success: false, error: 'Server returned an invalid response (not JSON). Check API URL.' };
+            }
+
             const data = await response.json();
 
             if (response.ok && data.success) {
                 const responseData = data.data;
                 localStorage.setItem("token", responseData.accessToken);
-                localStorage.setItem("user", JSON.stringify(responseData.user));
-
                 setIsAuthenticated(true);
-                setUser(responseData.user);
-                return { success: true, user: responseData.user };
+                return { success: true };
             }
             return { success: false, error: data.message || 'Login failed' };
         } catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error.message || "Network error" };
         }
     };
 
-    const autoLogin = (userData) => {
+    const autoLogin = () => {
         setIsAuthenticated(true);
-        setUser(userData);
     };
 
     const logout = async () => {
         try {
-            await fetch(`${import.meta.env.VITE_SERVER}/auth/logout`, {
+            await fetch(`${API_URL}/logout`, {
                 method: 'POST',
                 credentials: 'include'
             });
@@ -77,60 +84,64 @@ export const AuthProvider = ({ children }) => {
             console.error('Logout error:', error);
         } finally {
             setIsAuthenticated(false);
-            setUser(null);
+            localStorage.removeItem("token");
         }
     };
 
     const sendLoginOTP = async (email, userType) => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_SERVER}/auth/send-login-otp`, {
+            const response = await fetch(`${API_URL}/send-login-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, userType }),
             });
 
-            const data = await response.json();
-
-            if (response.ok) {
-                return { success: true, message: data.message };
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                const data = await response.json();
+                if (response.ok) return { success: true, message: data.message };
+                return { success: false, error: data.message || 'Failed to send OTP' };
             }
-            return { success: false, error: data.message || 'Failed to send OTP' };
+            return { success: false, error: 'Server returned non-JSON response.' };
+
         } catch (error) {
             return { success: false, error: 'Network error or server unreachable.' };
         }
     };
+
     const loginWithOTP = async (email, otp, role) => {
         try {
+            // Adjust endpoint if needed. Assuming these are also under /api/v1/auth
             let endpoint = '';
             if (role === 'patient') {
-                endpoint = '/auth/login/patient-with-otp';
+                endpoint = '/login/patient-with-otp';
             } else if (role === 'practitioner') {
-                endpoint = '/auth/login/practitioner-with-otp';
-            } else if (role === 'admin') { // ⬅️ ADDED ADMIN LOGIC
-                endpoint = '/auth/login/admin-with-otp';
+                endpoint = '/login/practitioner-with-otp';
+            } else if (role === 'admin') {
+                endpoint = '/login/admin-with-otp';
             } else {
                 return { success: false, error: 'OTP login not supported for this role.' };
             }
 
-            const response = await fetch(`${import.meta.env.VITE_SERVER}${endpoint}`, {
+            const response = await fetch(`${API_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, otp }),
                 credentials: 'include'
             });
 
-            const data = await response.json();
-
-            if (response.ok) {
-                // Assuming this function is inside AuthProvider
-                setIsAuthenticated(true);
-                setUser(data.data.user);
-                return { success: true, user: data.data.user };
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                const data = await response.json();
+                if (response.ok) {
+                    setIsAuthenticated(true);
+                    return { success: true, user: data.data.user };
+                }
+                return { success: false, error: data.message || 'OTP verification failed.' };
             }
+            return { success: false, error: 'Server returned non-JSON response.' };
 
-            return { success: false, error: data.message || 'OTP verification failed.' };
         } catch (error) {
-            // Catch network errors
             return { success: false, error: error.message };
         }
     };
@@ -138,7 +149,6 @@ export const AuthProvider = ({ children }) => {
     return (
         <AuthContext.Provider value={{
             isAuthenticated,
-            user,
             login,
             logout,
             autoLogin,
