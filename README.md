@@ -95,6 +95,6 @@ npm start
 
 Open in browser:
 Dashboard + Chatbot → http://localhost:<webapp_port>
-Attacker UI → http://localhost:3000 (or as configured)
+Attacker UI → http://localhost:3000
 Use the interface to simulate attacks, monitor logs, classify threats, and manage incidents.
 
