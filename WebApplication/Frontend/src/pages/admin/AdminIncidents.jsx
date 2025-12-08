@@ -114,6 +114,7 @@ const AdminIncidents = () => {
         const updates = {
             status: e.target.status.value,
             severity: e.target.severity.value,
+            analystNotes: e.target.analystNotes.value,
             blockIp: e.target.blockIp?.checked
         };
 
@@ -236,15 +237,17 @@ const AdminIncidents = () => {
                                             Auto Resolve
                                         </button>
                                     )}
-                                    <button
-                                        onClick={() => {
-                                            setSelectedIncident(incident);
-                                            setIsEditModalOpen(true);
-                                        }}
-                                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-medium transition-colors"
-                                    >
-                                        Manage
-                                    </button>
+                                    {incident.status === 'OPEN' && (
+                                        <button
+                                            onClick={() => {
+                                                setSelectedIncident(incident);
+                                                setIsEditModalOpen(true);
+                                            }}
+                                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-medium transition-colors"
+                                        >
+                                            Manage
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -301,6 +304,19 @@ const AdminIncidents = () => {
                                 </select>
                             </div>
 
+
+
+                            {/* Analyst Note Input */}
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Analyst Notes</label>
+                                <textarea
+                                    name="analystNotes"
+                                    defaultValue={selectedIncident.analystNotes || ''}
+                                    placeholder="Add investigation notes here..."
+                                    className="w-full bg-[#0B1120] border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-300 focus:border-red-500/50 outline-none min-h-[80px] resize-y"
+                                />
+                            </div>
+
                             <div className="flex items-center gap-2 mt-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                                 <input
                                     type="checkbox"
@@ -330,9 +346,9 @@ const AdminIncidents = () => {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div >
             )}
-        </div>
+        </div >
     );
 };
 

@@ -191,7 +191,7 @@ const getAllIncidents = asyncHandler(async (req, res) => {
 
 const updateIncident = asyncHandler(async (req, res) => {
     const { incidentId } = req.params;
-    const { status, severity, assignedTo, blockIp } = req.body;
+    const { status, severity, assignedTo, blockIp, analystNotes } = req.body;
 
     const incident = await Incident.findById(incidentId);
 
@@ -202,6 +202,7 @@ const updateIncident = asyncHandler(async (req, res) => {
     if (status) incident.status = status;
     if (severity) incident.severity = severity;
     if (assignedTo) incident.assignedTo = assignedTo; // Assuming assignedTo is ObjectId of Analyst
+    if (analystNotes !== undefined) incident.analystNotes = analystNotes;
 
     // Handle Manual Block IP Option
     if (blockIp && incident.sourceIp) {
