@@ -67,7 +67,7 @@ const Header = () => {
 
                 {/* Navigation Links */}
                 <div className="hidden md:flex items-center space-x-6">
-                    <Link to={isAuthenticated ? "/" : "/welcome"} className={`text-sm font-semibold transition-colors ${navLinkText}`}>
+                    <Link to={isAuthenticated ? "/welcome" : "/"} className={`text-sm font-semibold transition-colors ${navLinkText}`}>
                         Home
                     </Link>
                     <Link to="/about" className={`text-sm font-semibold transition-colors ${navLinkText}`}>
